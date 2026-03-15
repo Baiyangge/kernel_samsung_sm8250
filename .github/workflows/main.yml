@@ -1,0 +1,73 @@
+name: Build Samsung SM8250 Kernel
+
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "Device Model"
+        required: true
+        default: "G981N"
+        type: choice
+        options:
+          - G981N
+          - G986N
+          - G988N
+
+jobs:
+  build:
+    name: Build ${{ inputs.model }} Kernel
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android \
+            /opt/ghc /usr/local/share/boost
+          sudo apt-get autoremove -y && sudo apt-get clean
+          df -h /
+
+      - name: Checkout kernel source
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential bc bison flex libssl-dev libelf-dev \
+            python3 python-is-python3 zip cpio device-tree-compiler \
+            clang lld llvm
+
+      - name: Setup GCC 4.9 (aarch64) toolchain
+        run: |
+          mkdir -p toolchain/gcc/linux-x86/aarch64
+          git clone --depth=1 \
+            https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 \
+            toolchain/gcc/linux-x86/aarch64/aarch64-linux-android-4.9
+
+      - name: Setup Clang/LLVM toolchain
+        run: |
+          # 使用系统 clang 代替 Samsung 的 llvm-arm-toolchain-ship 10.0
+          # 如果编译失败，可替换为 Samsung 原版工具链（见 README）
+          mkdir -p toolchain/llvm-arm-toolchain-ship/10.0/bin
+          ln -s "$(which clang)" toolchain/llvm-arm-toolchain-ship/10.0/bin/clang
+
+      - name: Fix file permissions
+        run: |
+          chmod +x build.sh
+          chmod +x tools/dtc 2>/dev/null || true
+          find AIK_* -name "*.sh" -exec chmod +x {} \;
+          find AIK_*/bin -type f -exec chmod +x {} \; 2>/dev/null || true
+
+      - name: Build kernel
+        run: bash build.sh ${{ inputs.model }}
+
+      - name: Upload kernel artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.model }}-SuSFS-kernel
+          path: gorhanhee/*.tar
+          if-no-files-found: error
+          retention-days: 30
