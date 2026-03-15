@@ -47,19 +47,19 @@ jobs:
             python3 python-is-python3 zip cpio device-tree-compiler \
             clang lld llvm gcc-aarch64-linux-gnu
 
-      - name: Setup GCC 4.9 (aarch64) toolchain
+      - name: Setup cross-compilation toolchains
         run: |
-          mkdir -p toolchain/gcc/linux-x86/aarch64
-          git clone --depth=1 \
-            https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 \
-            toolchain/gcc/linux-x86/aarch64/aarch64-linux-android-4.9
+          # GCC 交叉工具链：用系统 aarch64-linux-gnu-* 创建符号链接
+          # 映射到 build.sh 期望的 aarch64-linux-android-* 路径
+          BIN_DIR="toolchain/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/bin"
+          mkdir -p "$BIN_DIR"
+          for tool in gcc g++ ar as ld nm objcopy objdump ranlib strip readelf size; do
+            ln -sf "/usr/bin/aarch64-linux-gnu-$tool" "$BIN_DIR/aarch64-linux-android-$tool"
+          done
 
-      - name: Setup Clang/LLVM toolchain
-        run: |
-          # 使用系统 clang 代替 Samsung 的 llvm-arm-toolchain-ship 10.0
-          # 如果编译失败，可替换为 Samsung 原版工具链（见 README）
+          # Clang：用系统 clang 代替 Samsung llvm-arm-toolchain-ship 10.0
           mkdir -p toolchain/llvm-arm-toolchain-ship/10.0/bin
-          ln -s "$(which clang)" toolchain/llvm-arm-toolchain-ship/10.0/bin/clang
+          ln -sf "$(which clang)" toolchain/llvm-arm-toolchain-ship/10.0/bin/clang
 
       - name: Fix OpenSSL 3.0 compatibility
         run: |
@@ -75,7 +75,10 @@ jobs:
           find AIK_*/bin -type f -exec chmod +x {} \; 2>/dev/null || true
 
       - name: Build kernel
-        run: bash build.sh ${{ inputs.model }}
+        run: |
+          # 抑制新版 clang 产生的警告（三星的 "forbidden warning" 机制会将其当作致命错误）
+          export KCFLAGS="-Wno-unused-but-set-variable -Wno-unused-but-set-parameter"
+          bash build.sh ${{ inputs.model }}
 
       - name: Upload kernel artifacts
         uses: actions/upload-artifact@v4
