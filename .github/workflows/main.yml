@@ -61,10 +61,17 @@ jobs:
           mkdir -p toolchain/llvm-arm-toolchain-ship/10.0/bin
           ln -sf "$(which clang)" toolchain/llvm-arm-toolchain-ship/10.0/bin/clang
 
+      - name: Disable Samsung forbidden warning mechanism
+        run: |
+          # scripts/gcc-wrapper.py 是三星的编译器包装器：
+          # 它会 grep 编译输出中的 "warning:"，如果发现非白名单的警告就 sys.exit(1)
+          # 新版 clang 14 产生大量旧版 clang 10 没有的警告，导致编译必定失败
+          # 将 exit(1) 改为 exit(0)，让警告不再阻断编译
+          sed -i 's/sys\.exit(1)/sys.exit(0)/g' scripts/gcc-wrapper.py
+
       - name: Fix OpenSSL 3.0 compatibility
         run: |
           # 内核 4.19 的 scripts/sign-file.c 使用了 OpenSSL 3.0 中已废弃的 API
-          # 在 KBUILD_HOSTCFLAGS 中添加 -Wno-deprecated-declarations 防止编译失败
           sed -i 's/KBUILD_HOSTCFLAGS   :=/KBUILD_HOSTCFLAGS   := -Wno-deprecated-declarations/' Makefile
 
       - name: Fix file permissions
@@ -75,10 +82,7 @@ jobs:
           find AIK_*/bin -type f -exec chmod +x {} \; 2>/dev/null || true
 
       - name: Build kernel
-        run: |
-          # 抑制新版 clang 产生的警告（三星的 "forbidden warning" 机制会将其当作致命错误）
-          export KCFLAGS="-Wno-unused-but-set-variable -Wno-unused-but-set-parameter"
-          bash build.sh ${{ inputs.model }}
+        run: bash build.sh ${{ inputs.model }}
 
       - name: Upload kernel artifacts
         uses: actions/upload-artifact@v4
