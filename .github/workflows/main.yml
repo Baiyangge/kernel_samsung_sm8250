@@ -29,8 +29,15 @@ jobs:
       - name: Checkout kernel source
         uses: actions/checkout@v4
         with:
-          submodules: recursive
           fetch-depth: 1
+
+      - name: Clone KernelSU-Next
+        run: |
+          # .gitmodules 缺失，手动克隆 KernelSU-Next 子模块
+          rm -rf KernelSU-Next
+          git clone --depth=1 \
+            https://github.com/KernelSU-Next/KernelSU-Next.git \
+            KernelSU-Next
 
       - name: Install build dependencies
         run: |
