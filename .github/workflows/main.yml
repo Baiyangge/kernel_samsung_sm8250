@@ -61,6 +61,12 @@ jobs:
           mkdir -p toolchain/llvm-arm-toolchain-ship/10.0/bin
           ln -s "$(which clang)" toolchain/llvm-arm-toolchain-ship/10.0/bin/clang
 
+      - name: Fix OpenSSL 3.0 compatibility
+        run: |
+          # 内核 4.19 的 scripts/sign-file.c 使用了 OpenSSL 3.0 中已废弃的 API
+          # 在 KBUILD_HOSTCFLAGS 中添加 -Wno-deprecated-declarations 防止编译失败
+          sed -i 's/KBUILD_HOSTCFLAGS   :=/KBUILD_HOSTCFLAGS   := -Wno-deprecated-declarations/' Makefile
+
       - name: Fix file permissions
         run: |
           chmod +x build.sh
